@@ -27,16 +27,19 @@ import {
   type TerminalEvent,
   type TerminalMetadataStreamEvent,
   type TerminalOpenInput,
+  type TerminalProfileSelection,
   type TerminalResizeInput,
   type TerminalRestartInput,
   type TerminalSessionSnapshot,
   type TerminalSessionStatus,
   type TerminalSummary,
   type TerminalWriteInput,
+  TerminalProfileUnavailableError,
   ClaudeSettings,
   CodexSettings,
   ProviderInstanceId,
 } from "@t3tools/contracts";
+import * as Fs from "node:fs";
 import { makeKeyedCoalescingWorker } from "@t3tools/shared/KeyedCoalescingWorker";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
@@ -560,7 +563,9 @@ function resolveShellCandidates(
   shellResolver: () => string,
   platform: NodeJS.Platform,
   env: NodeJS.ProcessEnv,
+  profile: TerminalProfileSelection | null = null,
 ): ShellCandidate[] {
+  const selected = profile ? { shell: profile.executable, args: [...profile.args] } : null;
   const requested = shellCandidateFromCommand(
     normalizeShellCommand(shellResolver(), platform),
     platform,
@@ -568,6 +573,7 @@ function resolveShellCandidates(
 
   if (platform === "win32") {
     return uniqueShellCandidates([
+      selected,
       requested,
       shellCandidateFromCommand("pwsh.exe", platform),
       shellCandidateFromCommand(windowsPowerShellPath(env), platform),
@@ -579,6 +585,7 @@ function resolveShellCandidates(
   }
 
   return uniqueShellCandidates([
+    selected,
     requested,
     shellCandidateFromCommand(normalizeShellCommand(env.SHELL, platform), platform),
     shellCandidateFromCommand("/bin/zsh", platform),
@@ -1409,6 +1416,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   const historyLineLimit = options.historyLineLimit ?? DEFAULT_HISTORY_LINE_LIMIT;
   const historyByteLimit = options.historyByteLimit ?? DEFAULT_HISTORY_BYTE_LIMIT;
   const platform = yield* HostProcessPlatform;
+  const serverSettings = yield* ServerSettings.ServerSettingsService;
   // Terminals must inherit the user's full environment (minus the blocklist
   // applied in createTerminalSpawnEnv) — an allowlist here silently strips
   // things like PSModulePath, DISPLAY, proxies, and toolchain variables.
@@ -2164,7 +2172,18 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       increment(terminalSessionsTotal, { lifecycle: eventType }).pipe(
         Effect.andThen(
           Effect.gen(function* () {
-            const shellCandidates = resolveShellCandidates(shellResolver, platform, baseEnv);
+            if (input.profile && !Fs.existsSync(input.profile.executable)) {
+              return yield* new TerminalProfileUnavailableError({
+                profileId: input.profile.executable,
+              });
+            }
+            const settings = yield* serverSettings.getSettings;
+            const shellCandidates = resolveShellCandidates(
+              shellResolver,
+              platform,
+              baseEnv,
+              input.profile ?? settings.defaultTerminalProfile,
+            );
             const terminalEnv = createTerminalSpawnEnv(baseEnv, session.runtimeEnv);
             const spawnResult = yield* trySpawn(shellCandidates, terminalEnv, session);
             ptyProcess = spawnResult.process;
@@ -2494,6 +2513,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
           cols,
           rows,
           ...(input.env ? { env: input.env } : {}),
+          ...(input.profile ? { profile: input.profile } : {}),
         },
         "started",
       );
@@ -2546,6 +2566,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
           cols: targetCols,
           rows: targetRows,
           ...(input.env ? { env: input.env } : {}),
+          ...(input.profile ? { profile: input.profile } : {}),
         },
         "started",
       );
@@ -2924,6 +2945,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
           cols,
           rows,
           ...(input.env ? { env: input.env } : {}),
+          ...(input.profile ? { profile: input.profile } : {}),
         },
         "restarted",
       );

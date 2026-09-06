@@ -159,6 +159,10 @@ import {
   TerminalEvent,
   TerminalMetadataStreamEvent,
   TerminalOpenInput,
+  TerminalProfile,
+  TerminalProfilesResult,
+  TerminalProfileSelection,
+  TerminalProfileUnavailableError,
   TerminalResizeInput,
   TerminalRestartInput,
   TerminalSessionSnapshot,
@@ -295,6 +299,8 @@ export const WS_METHODS = {
   terminalClear: "terminal.clear",
   terminalRestart: "terminal.restart",
   terminalClose: "terminal.close",
+  terminalProfiles: "terminal.profiles",
+  terminalSetDefaultProfile: "terminal.setDefaultProfile",
 
   // Preview methods
   previewOpen: "preview.open",
@@ -969,6 +975,22 @@ export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   error: Schema.Union([TerminalError, EnvironmentAuthorizationError]),
 });
 
+export const WsTerminalProfilesRpc = Rpc.make(WS_METHODS.terminalProfiles, {
+  payload: Schema.Struct({}),
+  success: TerminalProfilesResult,
+  error: Schema.Union([ServerSettingsError, EnvironmentAuthorizationError]),
+});
+
+export const WsTerminalSetDefaultProfileRpc = Rpc.make(WS_METHODS.terminalSetDefaultProfile, {
+  payload: TerminalProfileSelection,
+  success: TerminalProfile,
+  error: Schema.Union([
+    TerminalProfileUnavailableError,
+    ServerSettingsError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
 export const WsTerminalAttachRpc = Rpc.make(WS_METHODS.terminalAttach, {
   payload: TerminalAttachInput,
   success: TerminalAttachStreamEvent,
@@ -1290,6 +1312,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsReviewGetDiffPreviewRpc,
   WsReviewGetDiffFileContentsRpc,
   WsTerminalOpenRpc,
+  WsTerminalProfilesRpc,
+  WsTerminalSetDefaultProfileRpc,
   WsTerminalAttachRpc,
   WsTerminalWriteRpc,
   WsTerminalResizeRpc,

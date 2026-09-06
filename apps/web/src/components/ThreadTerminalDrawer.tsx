@@ -11,7 +11,6 @@ import {
   type TerminalSessionState,
 } from "@t3tools/client-runtime/state/terminal";
 import {
-  Plus,
   Square,
   SquareSplitHorizontal,
   SquareSplitVertical,
@@ -23,6 +22,7 @@ import {
   type ProviderInstanceId,
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
+  type TerminalProfileSelection,
   type ThreadId,
 } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
@@ -40,7 +40,6 @@ import {
   useState,
 } from "react";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
-import { Button } from "~/components/ui/button";
 import { PanelTabCloseButton } from "~/components/ui/panel-tab-close-button";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { readTextFromClipboard, writeTextToClipboard } from "~/hooks/useCopyToClipboard";
@@ -84,6 +83,7 @@ import { terminalEnvironment } from "../state/terminal";
 import { openTerminalLinkInPreview } from "./preview/openTerminalLinkInPreview";
 import { useAtomCommand } from "../state/use-atom-command";
 import { preventTerminalCloseShortcut } from "../lib/terminalCloseShortcut";
+import { TerminalProfileSelector } from "./TerminalProfileSelector";
 import {
   resolveTerminalFontPreference,
   resolveTerminalFontSizePreference,
@@ -1002,7 +1002,7 @@ interface ThreadTerminalDrawerProps {
   focusRequestId: number;
   onSplitTerminal: () => void;
   onSplitTerminalVertical: () => void;
-  onNewTerminal: () => void;
+  onNewTerminal: (profile?: TerminalProfileSelection) => void;
   splitShortcutLabel?: string | undefined;
   splitVerticalShortcutLabel?: string | undefined;
   newShortcutLabel?: string | undefined;
@@ -1260,9 +1260,6 @@ export default function ThreadTerminalDrawer({
     : splitVerticalShortcutLabel
       ? `Split Terminal Vertically (${splitVerticalShortcutLabel})`
       : "Split Terminal Vertically";
-  const newTerminalActionLabel = newShortcutLabel
-    ? `New Terminal (${newShortcutLabel})`
-    : "New Terminal";
   const closeTerminalActionLabel = closeShortcutLabel
     ? `Close Terminal (${closeShortcutLabel})`
     : "Close Terminal";
@@ -1274,9 +1271,12 @@ export default function ThreadTerminalDrawer({
     if (hasReachedSplitLimit) return;
     onSplitTerminalVertical();
   }, [hasReachedSplitLimit, onSplitTerminalVertical]);
-  const onNewTerminalAction = useCallback(() => {
-    onNewTerminal();
-  }, [onNewTerminal]);
+  const onNewTerminalAction = useCallback(
+    (profile?: TerminalProfileSelection) => {
+      onNewTerminal(profile);
+    },
+    [onNewTerminal],
+  );
   const confirmCloseTerminal = useCallback(
     (terminalId: string) => {
       const label = terminalLabelById.get(terminalId) ?? getTerminalLabel(terminalId);
@@ -1410,9 +1410,11 @@ export default function ThreadTerminalDrawer({
         ) : null}
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center text-sm text-muted-foreground">
           <p>No terminal sessions for this thread yet.</p>
-          <Button size="xs" variant="outline" onClick={onNewTerminalAction}>
-            {newTerminalActionLabel}
-          </Button>
+          <TerminalProfileSelector
+            environmentId={threadRef.environmentId}
+            onCreateTerminal={onNewTerminalAction}
+            newShortcutLabel={newShortcutLabel}
+          />
         </div>
       </aside>
     );
@@ -1466,13 +1468,11 @@ export default function ThreadTerminalDrawer({
               <SquareSplitVertical className="size-3.25" />
             </TerminalActionButton>
             <div className="h-4 w-px bg-border/80" />
-            <TerminalActionButton
-              className="p-1 text-foreground/90 transition-colors hover:bg-accent"
-              onClick={onNewTerminalAction}
-              label={newTerminalActionLabel}
-            >
-              <Plus className="size-3.25" />
-            </TerminalActionButton>
+            <TerminalProfileSelector
+              environmentId={threadRef.environmentId}
+              onCreateTerminal={onNewTerminalAction}
+              newShortcutLabel={newShortcutLabel}
+            />
             <div className="h-4 w-px bg-border/80" />
             <TerminalActionButton
               className="p-1 text-foreground/90 transition-colors hover:bg-accent"
@@ -1609,13 +1609,11 @@ export default function ThreadTerminalDrawer({
                   >
                     <SquareSplitVertical className="size-3.25" />
                   </TerminalActionButton>
-                  <TerminalActionButton
-                    className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
-                    onClick={onNewTerminalAction}
-                    label={newTerminalActionLabel}
-                  >
-                    <Plus className="size-3.25" />
-                  </TerminalActionButton>
+                  <TerminalProfileSelector
+                    environmentId={threadRef.environmentId}
+                    onCreateTerminal={onNewTerminalAction}
+                    newShortcutLabel={newShortcutLabel}
+                  />
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
                     onClick={() => confirmCloseTerminal(resolvedActiveTerminalId)}

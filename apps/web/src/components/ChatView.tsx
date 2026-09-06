@@ -24,6 +24,7 @@ import {
   resolveEnvironmentMachineKind,
   RuntimeMode,
   TerminalOpenInput,
+  type TerminalProfileSelection,
 } from "@t3tools/contracts";
 import { type EnvironmentConnectionPresentation } from "@t3tools/client-runtime/connection";
 import { wasBootstrapThreadDeleted } from "@t3tools/client-runtime/errors";
@@ -1028,34 +1029,52 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
     threadRef,
   ]);
 
-  const createNewTerminal = useCallback(() => {
-    if (!cwd) {
-      return;
-    }
-    const terminalId = nextTerminalId(allocatableTerminalIds);
-    storeNewTerminal(threadRef, terminalId);
-    bumpFocusRequestId();
-    void openTerminal({
-      environmentId: threadRef.environmentId,
-      input: {
-        threadId,
-        terminalId,
-        cwd,
-        ...(effectiveWorktreePath != null ? { worktreePath: effectiveWorktreePath } : {}),
-        env: runtimeEnv,
-      },
-    });
-  }, [
-    bumpFocusRequestId,
-    cwd,
-    effectiveWorktreePath,
-    allocatableTerminalIds,
-    runtimeEnv,
-    storeNewTerminal,
-    threadId,
-    threadRef,
-    openTerminal,
-  ]);
+  const createNewTerminal = useCallback(
+    (profile?: TerminalProfileSelection) => {
+      if (!cwd) {
+        return;
+      }
+      const terminalId = nextTerminalId(allocatableTerminalIds);
+      storeNewTerminal(threadRef, terminalId);
+      bumpFocusRequestId();
+      void openTerminal({
+        environmentId: threadRef.environmentId,
+        input: {
+          threadId,
+          terminalId,
+          cwd,
+          ...(effectiveWorktreePath != null ? { worktreePath: effectiveWorktreePath } : {}),
+          env: runtimeEnv,
+          ...(profile ? { profile } : {}),
+        },
+      }).then((result) => {
+        if (!profile || result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+        storeCloseTerminal(threadRef, terminalId);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not create terminal",
+            description:
+              squashAtomCommandFailure(result) instanceof Error
+                ? squashAtomCommandFailure(result).message
+                : "The selected shell is no longer available.",
+          }),
+        );
+      });
+    },
+    [
+      bumpFocusRequestId,
+      cwd,
+      effectiveWorktreePath,
+      allocatableTerminalIds,
+      runtimeEnv,
+      storeNewTerminal,
+      threadId,
+      threadRef,
+      openTerminal,
+      storeCloseTerminal,
+    ],
+  );
 
   const activateTerminal = useCallback(
     (terminalId: string) => {
@@ -1169,7 +1188,7 @@ interface PersistentThreadTerminalPanelProps {
   onAddTerminalContext: (selection: TerminalContextSelection) => void;
   onSplitTerminal: () => void;
   onSplitTerminalVertical: () => void;
-  onNewTerminal: () => void;
+  onNewTerminal: (profile?: TerminalProfileSelection) => void;
   onActiveTerminalChange: (terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
   splitShortcutLabel?: string | undefined;
@@ -3335,41 +3354,59 @@ export default function ChatView(props: ChatViewProps) {
       storeSplitTerminalVertical,
     ],
   );
-  const createNewTerminal = useCallback(() => {
-    if (!activeThreadRef || !activeThreadId || !activeProject) {
-      return;
-    }
-    const cwdForOpen = gitCwd ?? activeProject.workspaceRoot;
-    if (!cwdForOpen) {
-      return;
-    }
-    const terminalId = nextTerminalId(allocatableActiveTerminalIds);
-    storeNewTerminal(activeThreadRef, terminalId);
-    setTerminalFocusRequestId((value) => value + 1);
-    void openTerminal({
+  const createNewTerminal = useCallback(
+    (profile?: TerminalProfileSelection) => {
+      if (!activeThreadRef || !activeThreadId || !activeProject) {
+        return;
+      }
+      const cwdForOpen = gitCwd ?? activeProject.workspaceRoot;
+      if (!cwdForOpen) {
+        return;
+      }
+      const terminalId = nextTerminalId(allocatableActiveTerminalIds);
+      storeNewTerminal(activeThreadRef, terminalId);
+      setTerminalFocusRequestId((value) => value + 1);
+      void openTerminal({
+        environmentId,
+        input: {
+          threadId: activeThreadId,
+          terminalId,
+          cwd: cwdForOpen,
+          ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
+          env: projectScriptRuntimeEnv({
+            project: { cwd: activeProject.workspaceRoot },
+            worktreePath: activeThreadWorktreePath,
+          }),
+          ...(profile ? { profile } : {}),
+        },
+      }).then((result) => {
+        if (!profile || result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+        storeCloseTerminal(activeThreadRef, terminalId);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not create terminal",
+            description:
+              squashAtomCommandFailure(result) instanceof Error
+                ? squashAtomCommandFailure(result).message
+                : "The selected shell is no longer available.",
+          }),
+        );
+      });
+    },
+    [
+      activeProject,
+      activeThreadId,
+      allocatableActiveTerminalIds,
+      activeThreadRef,
+      openTerminal,
+      activeThreadWorktreePath,
       environmentId,
-      input: {
-        threadId: activeThreadId,
-        terminalId,
-        cwd: cwdForOpen,
-        ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
-        env: projectScriptRuntimeEnv({
-          project: { cwd: activeProject.workspaceRoot },
-          worktreePath: activeThreadWorktreePath,
-        }),
-      },
-    });
-  }, [
-    activeProject,
-    activeThreadId,
-    allocatableActiveTerminalIds,
-    activeThreadRef,
-    openTerminal,
-    activeThreadWorktreePath,
-    environmentId,
-    gitCwd,
-    storeNewTerminal,
-  ]);
+      gitCwd,
+      storeNewTerminal,
+      storeCloseTerminal,
+    ],
+  );
   const closeTerminal = useCallback(
     (terminalId: string) => {
       if (!activeThreadId || !activeThreadRef) return;
@@ -4044,34 +4081,53 @@ export default function ChatView(props: ChatViewProps) {
       useRightPanelStore.getState().close(activeThreadRef);
     }
   }, [activeThreadRef]);
-  const addTerminalSurface = useCallback(() => {
-    if (!activeThreadRef || !activeThreadId || !activeProject) return;
-    const cwd = gitCwd ?? activeProject.workspaceRoot;
-    const terminalId = nextTerminalId(allocatableActiveTerminalIds);
-    useRightPanelStore.getState().openTerminal(activeThreadRef, terminalId);
-    setTerminalFocusRequestId((value) => value + 1);
-    void openTerminal({
-      environmentId: activeThreadRef.environmentId,
-      input: {
-        threadId: activeThreadId,
-        terminalId,
-        cwd,
-        ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
-        env: projectScriptRuntimeEnv({
-          project: { cwd: activeProject.workspaceRoot },
-          worktreePath: activeThreadWorktreePath,
-        }),
-      },
-    });
-  }, [
-    activeProject,
-    activeThreadId,
-    activeThreadRef,
-    activeThreadWorktreePath,
-    allocatableActiveTerminalIds,
-    gitCwd,
-    openTerminal,
-  ]);
+  const addTerminalSurface = useCallback(
+    (profile?: TerminalProfileSelection) => {
+      if (!activeThreadRef || !activeThreadId || !activeProject) return;
+      const cwd = gitCwd ?? activeProject.workspaceRoot;
+      const terminalId = nextTerminalId(allocatableActiveTerminalIds);
+      const surfaceId = `terminal:${terminalId}`;
+      useRightPanelStore.getState().openTerminal(activeThreadRef, terminalId);
+      setTerminalFocusRequestId((value) => value + 1);
+      void openTerminal({
+        environmentId: activeThreadRef.environmentId,
+        input: {
+          threadId: activeThreadId,
+          terminalId,
+          cwd,
+          ...(activeThreadWorktreePath != null ? { worktreePath: activeThreadWorktreePath } : {}),
+          env: projectScriptRuntimeEnv({
+            project: { cwd: activeProject.workspaceRoot },
+            worktreePath: activeThreadWorktreePath,
+          }),
+          ...(profile ? { profile } : {}),
+        },
+      }).then((result) => {
+        if (!profile || result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+        useRightPanelStore.getState().closeTerminal(activeThreadRef, surfaceId, terminalId);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not create terminal",
+            description:
+              squashAtomCommandFailure(result) instanceof Error
+                ? squashAtomCommandFailure(result).message
+                : "The selected shell is no longer available.",
+          }),
+        );
+      });
+    },
+    [
+      activeProject,
+      activeThreadId,
+      activeThreadRef,
+      activeThreadWorktreePath,
+      allocatableActiveTerminalIds,
+      gitCwd,
+      openTerminal,
+      storeCloseTerminal,
+    ],
+  );
   const splitPanelTerminal = useCallback(
     (direction: "horizontal" | "vertical" = "horizontal") => {
       if (

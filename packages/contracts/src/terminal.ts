@@ -25,6 +25,36 @@ const TerminalEnvSchema = Schema.Record(TerminalEnvKeySchema, TerminalEnvValueSc
   Schema.isMaxProperties(128),
 );
 
+/** A server-validated shell profile used to start newly created terminals. */
+export const TerminalProfile = Schema.Struct({
+  id: TrimmedNonEmptyStringSchema,
+  name: TrimmedNonEmptyStringSchema,
+  executable: TrimmedNonEmptyStringSchema,
+  args: Schema.Array(Schema.String),
+});
+export type TerminalProfile = typeof TerminalProfile.Type;
+
+export const TerminalProfilesResult = Schema.Struct({
+  profiles: Schema.Array(TerminalProfile),
+  defaultProfileId: Schema.NullOr(TrimmedNonEmptyStringSchema),
+});
+export type TerminalProfilesResult = typeof TerminalProfilesResult.Type;
+
+export const TerminalProfileSelection = Schema.Struct({
+  executable: TrimmedNonEmptyStringSchema,
+  args: Schema.Array(Schema.String),
+});
+export type TerminalProfileSelection = typeof TerminalProfileSelection.Type;
+
+export class TerminalProfileUnavailableError extends Schema.TaggedErrorClass<TerminalProfileUnavailableError>()(
+  "TerminalProfileUnavailableError",
+  { profileId: TrimmedNonEmptyStringSchema },
+) {
+  override get message() {
+    return `Terminal profile is no longer available: ${this.profileId}`;
+  }
+}
+
 export const TerminalThreadInput = Schema.Struct({
   threadId: TrimmedNonEmptyStringSchema,
 });
@@ -44,6 +74,7 @@ export const TerminalOpenInput = Schema.Struct({
   cols: Schema.optional(TerminalColsSchema),
   rows: Schema.optional(TerminalRowsSchema),
   env: Schema.optional(TerminalEnvSchema),
+  profile: Schema.optional(TerminalProfileSelection),
   providerInstanceId: Schema.optional(ProviderInstanceId),
 });
 export type TerminalOpenInput = typeof TerminalOpenInput.Type;
@@ -55,6 +86,7 @@ export const TerminalAttachInput = Schema.Struct({
   cols: Schema.optional(TerminalColsSchema),
   rows: Schema.optional(TerminalRowsSchema),
   env: Schema.optional(TerminalEnvSchema),
+  profile: Schema.optional(TerminalProfileSelection),
   providerInstanceId: Schema.optional(ProviderInstanceId),
   restartIfNotRunning: Schema.optional(Schema.Boolean),
 });
@@ -83,6 +115,7 @@ export const TerminalRestartInput = Schema.Struct({
   cols: TerminalColsSchema,
   rows: TerminalRowsSchema,
   env: Schema.optional(TerminalEnvSchema),
+  profile: Schema.optional(TerminalProfileSelection),
   providerInstanceId: Schema.optional(ProviderInstanceId),
 });
 export type TerminalRestartInput = typeof TerminalRestartInput.Type;
@@ -369,6 +402,7 @@ export class TerminalResizeError extends Schema.TaggedErrorClass<TerminalResizeE
 }
 
 export const TerminalError = Schema.Union([
+  TerminalProfileUnavailableError,
   TerminalCwdError,
   TerminalHistoryError,
   TerminalSessionLookupError,

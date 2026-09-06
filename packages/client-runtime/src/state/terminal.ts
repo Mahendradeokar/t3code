@@ -63,6 +63,16 @@ export function createTerminalEnvironmentAtoms<R, E>(
       scheduler: lifecycleScheduler,
       concurrency: lifecycleConcurrency,
     }),
+    profiles: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:terminal:profiles",
+      tag: WS_METHODS.terminalProfiles,
+      staleTimeMs: 0,
+      idleTtlMs: 120_000,
+    }),
+    setDefaultProfile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:terminal:set-default-profile",
+      tag: WS_METHODS.terminalSetDefaultProfile,
+    }),
     write: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:terminal:write",
       tag: WS_METHODS.terminalWrite,

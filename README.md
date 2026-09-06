@@ -110,7 +110,7 @@ Checkout their getting started guide for more information: https://viteplus.dev/
 
 ### Install dependencies
 
-```bash
+```b iash
 vp i
 ```
 
