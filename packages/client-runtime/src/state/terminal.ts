@@ -5,6 +5,7 @@ import { Atom } from "effect/unstable/reactivity";
 import {
   createAtomCommandScheduler,
   createEnvironmentRpcCommand,
+  createEnvironmentRpcQueryAtomFamily,
   createEnvironmentRpcSubscriptionAtomFamily,
   createEnvironmentSubscriptionAtomFamily,
 } from "./runtime.ts";

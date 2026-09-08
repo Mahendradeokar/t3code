@@ -1050,14 +1050,13 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
       }).then((result) => {
         if (!profile || result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
         storeCloseTerminal(threadRef, terminalId);
+        const error = squashAtomCommandFailure(result);
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: "Could not create terminal",
             description:
-              squashAtomCommandFailure(result) instanceof Error
-                ? squashAtomCommandFailure(result).message
-                : "The selected shell is no longer available.",
+              error instanceof Error ? error.message : "The selected shell is no longer available.",
           }),
         );
       });
@@ -3382,14 +3381,13 @@ export default function ChatView(props: ChatViewProps) {
       }).then((result) => {
         if (!profile || result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
         storeCloseTerminal(activeThreadRef, terminalId);
+        const error = squashAtomCommandFailure(result);
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: "Could not create terminal",
             description:
-              squashAtomCommandFailure(result) instanceof Error
-                ? squashAtomCommandFailure(result).message
-                : "The selected shell is no longer available.",
+              error instanceof Error ? error.message : "The selected shell is no longer available.",
           }),
         );
       });
@@ -4105,14 +4103,13 @@ export default function ChatView(props: ChatViewProps) {
       }).then((result) => {
         if (!profile || result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
         useRightPanelStore.getState().closeTerminal(activeThreadRef, surfaceId, terminalId);
+        const error = squashAtomCommandFailure(result);
         toastManager.add(
           stackedThreadToast({
             type: "error",
             title: "Could not create terminal",
             description:
-              squashAtomCommandFailure(result) instanceof Error
-                ? squashAtomCommandFailure(result).message
-                : "The selected shell is no longer available.",
+              error instanceof Error ? error.message : "The selected shell is no longer available.",
           }),
         );
       });

@@ -1,18 +1,27 @@
-import type { TerminalProfile, TerminalProfileSelection } from "@t3tools/contracts";
+import type { EnvironmentId, TerminalProfile, TerminalProfileSelection } from "@t3tools/contracts";
 import { ChevronDown, Check, LoaderCircle, Plus } from "lucide-react";
 import { useState } from "react";
 import { useEnvironmentQuery } from "../state/query";
 import { terminalEnvironment } from "../state/terminal";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomRefresh } from "@effect/atom-react";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "./ui/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "./ui/menu";
 import { toastManager } from "./ui/toast";
 import { cn } from "~/lib/utils";
 
 interface TerminalProfileSelectorProps {
-  environmentId: string;
+  environmentId: EnvironmentId;
   onCreateTerminal: (profile?: TerminalProfileSelection) => void;
-  newShortcutLabel?: string;
+  newShortcutLabel?: string | undefined;
 }
 
 function selectionOf(profile: TerminalProfile): TerminalProfileSelection {
@@ -31,7 +40,6 @@ export function TerminalProfileSelector({
     reportFailure: false,
   });
   const refreshProfiles = useAtomRefresh(profilesAtom);
-  const [configureDefault, setConfigureDefault] = useState(false);
   const [pendingDefaultId, setPendingDefaultId] = useState<string | null>(null);
 
   const defaultProfileId = pendingDefaultId ?? query.data?.defaultProfileId ?? null;
@@ -53,7 +61,6 @@ export function TerminalProfileSelector({
       return;
     }
     setPendingDefaultId(null);
-    setConfigureDefault(false);
     void refreshProfiles();
   };
 
@@ -74,7 +81,6 @@ export function TerminalProfileSelector({
       <Menu
         onOpenChange={(open) => {
           if (open) {
-            setConfigureDefault(false);
             void refreshProfiles();
           }
         }}
@@ -97,13 +103,7 @@ export function TerminalProfileSelector({
             return (
               <MenuItem
                 key={profile.id}
-                onClick={() => {
-                  if (configureDefault) {
-                    void selectDefault(profile);
-                  } else {
-                    onCreateTerminal(selectionOf(profile));
-                  }
-                }}
+                onClick={() => onCreateTerminal(selectionOf(profile))}
                 className="justify-between"
               >
                 <span className="flex min-w-0 items-center gap-2 truncate">
@@ -117,9 +117,36 @@ export function TerminalProfileSelector({
             );
           })}
           {query.data && query.data.profiles.length > 0 ? <MenuSeparator /> : null}
-          <MenuItem onClick={() => setConfigureDefault((value) => !value)}>
-            {configureDefault ? "Choose shell to set as default" : "Configure default shell"}
-          </MenuItem>
+          <MenuSub>
+            <MenuSubTrigger>Configure default shell</MenuSubTrigger>
+            <MenuSubPopup className="w-64">
+              {query.data?.profiles.map((profile) => {
+                const isDefault = profile.id === defaultProfileId;
+                const isPending = profile.id === pendingDefaultId;
+                return (
+                  <MenuItem
+                    key={profile.id}
+                    disabled={pendingDefaultId !== null}
+                    onClick={() => void selectDefault(profile)}
+                    className="justify-between"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 truncate">
+                      {isDefault ? <Check className="size-3.5" /> : <span className="size-3.5" />}
+                      <span className="truncate">{profile.name}</span>
+                    </span>
+                    {isPending ? (
+                      <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+                    ) : isDefault ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">Default</span>
+                    ) : null}
+                  </MenuItem>
+                );
+              })}
+              {query.data && query.data.profiles.length === 0 ? (
+                <div className="px-2 py-1 text-xs text-muted-foreground">No shells detected</div>
+              ) : null}
+            </MenuSubPopup>
+          </MenuSub>
           {query.data && query.data.profiles.length === 0 ? (
             <div className={cn("px-2 py-1 text-xs text-muted-foreground")}>No shells detected</div>
           ) : null}
